@@ -1,0 +1,17 @@
+# Python 가상 환경 제외
+venv/
+.env
+__pycache__/
+*.pyc
+
+# IDE 관련 (VSCode, PyCharm 등)
+.vscode/
+.idea/
+
+# Python cache 파일 제외
+__pycache__/
+*.pyc
+*.pyo
+
+# 환경변수 파일 제외
+.env
