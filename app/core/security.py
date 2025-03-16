@@ -16,6 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/token")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class TokenData(BaseModel):
+    id: Optional[int] = None
     email: Optional[str] = None
     role: Optional[str] = None
 
@@ -37,15 +38,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
+        user_id = payload.get("sub")
+        email: str = payload.get("email")
         role: str = payload.get("role")
-        if email is None or role is None:
+
+        if user_id is None or email is None or role is None:
             raise credentials_exception
-        token_data = TokenData(email=email, role=role)
+        token_data = TokenData(id=int(user_id), email=email, role=role)  # id를 int로 변환
     except JWTError:
         raise credentials_exception
 
-    user = get_user(db, token_data.username)
+    user = db.query(UserModel).filter(UserModel.id == token_data.id).first()  # id로 조회
     if user is None:
         raise credentials_exception
     return user

@@ -29,6 +29,7 @@ app.include_router(api_router, prefix="/v1")
 @app.on_event("startup")
 def on_startup():
     # 모델 임포트
-    import app.models.user
+    from app.models import user, reservation, exam_schedule
 
+    # Base.metadata.drop_all(bind=engine)  # 기존 테이블 삭제 (데이터 초기화됨)
     Base.metadata.create_all(bind=engine)
