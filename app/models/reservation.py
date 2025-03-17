@@ -16,6 +16,7 @@ class Reservation(Base):
     reserved_count = Column(Integer, nullable=False)  # 예약 인원
     is_confirmed = Column(Boolean, default=False)  # 확정 여부
     created_at = Column(DateTime, server_default=func.now())  # 자동 생성
+    updated_at = Column(DateTime, onupdate=func.now())  # 예약 변경 시 자동 갱신
 
     # 관계 설정
     user = relationship("User", back_populates="reservations")
