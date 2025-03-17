@@ -24,7 +24,7 @@ async def get_user_reservations(
     current_user: User = Depends(get_current_user),
 ):
     """
-    사용자 예약 조회 API: 현재 로그인한 사용자의 예약 정보를 필터링하여 조회한다.
+    사용자 예약 조회 API: 현재 로그인한 사용자의 예약 정보를 필터링하여 조회
     - 날짜 범위 지정 가능 (start_date, end_date)
     - 확정 여부 필터링 가능 (is_confirmed)
     - 과거 또는 미래 예약 필터링 가능 (past)
@@ -52,7 +52,7 @@ async def get_user_reservations(
 
     # 과거 예약 필터링
     if past is not None:
-        now = datetime.utcnow().date()
+        now = datetime.date()
         if past:
             query = query.filter(Reservation.date < now)
         else:
