@@ -1,6 +1,6 @@
 # app/api/routes/reservation.py
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.models.reservation import Reservation
 from app.models.exam_schedule import ExamSchedule
@@ -9,9 +9,59 @@ from app.schemas.reservation_schema import ReservationCreate, ReservationOut
 from app.database.dependencies import get_db
 from app.core.security import get_current_user
 from app.core.exceptions import ReservationTimeError, ReservationCapacityError
-from typing import List  # List 타입 추가
+from typing import List, Optional  # List 타입 추가
 
 router = APIRouter(prefix="/reservations", tags=["reservations"])
+
+
+@router.get("/", response_model=List[ReservationOut])
+async def get_user_reservations(
+    start_date: Optional[str] = Query(None, description="조회 시작 날짜 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="조회 종료 날짜 (YYYY-MM-DD)"),
+    is_confirmed: Optional[bool] = Query(None, description="확정 여부 필터"),
+    past: Optional[bool] = Query(None, description="과거 예약 여부 필터"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    사용자 예약 조회 API: 현재 로그인한 사용자의 예약 정보를 필터링하여 조회한다.
+    - 날짜 범위 지정 가능 (start_date, end_date)
+    - 확정 여부 필터링 가능 (is_confirmed)
+    - 과거 또는 미래 예약 필터링 가능 (past)
+    """
+    query = db.query(Reservation).filter(Reservation.user_id == current_user.id)
+
+    # 날짜 필터링
+    if start_date:
+        try:
+            start_date_parsed = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(Reservation.date >= start_date_parsed)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.")
+    
+    if end_date:
+        try:
+            end_date_parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(Reservation.date <= end_date_parsed)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.")
+
+    # 확정 여부 필터링
+    if is_confirmed is not None:
+        query = query.filter(Reservation.is_confirmed == is_confirmed)
+
+    # 과거 예약 필터링
+    if past is not None:
+        now = datetime.utcnow().date()
+        if past:
+            query = query.filter(Reservation.date < now)
+        else:
+            query = query.filter(Reservation.date >= now)
+
+    # 데이터 조회 및 반환
+    user_reservations = query.all()
+    return user_reservations
+
 
 @router.post("/", response_model=List[ReservationOut])
 async def create_reservation(
@@ -31,7 +81,7 @@ async def create_reservation(
         raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.")
 
     # 2. 시험 시작 3일 전인지 체크
-    if start_date - timedelta(days=3) < datetime.utcnow().date():
+    if start_date - timedelta(days=3) < datetime.date():
         raise ReservationTimeError()
 
     # 3. 신청 시간이 1시간 단위인지 체크
