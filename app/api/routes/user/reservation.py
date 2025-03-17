@@ -217,3 +217,51 @@ async def update_reservation(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"예약 수정 중 오류 발생: {str(e)}")
+    
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.models.reservation import Reservation
+from app.database.dependencies import get_db
+from app.core.security import get_current_user
+
+router = APIRouter(prefix="/reservations", tags=["reservations"])
+
+@router.delete("/{reservation_group_id}")
+async def delete_reservation(
+    reservation_group_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    사용자의 예약 삭제 API
+    - 본인 예약인지 확인
+    - 확정되지 않은 예약만 삭제 가능
+    """
+    # 해당 `reservation_group_id`에 속하는 예약 조회
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.reservation_group_id == reservation_group_id)
+        .all()
+    )
+
+    if not reservations:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    # 본인 예약인지 확인
+    if reservations[0].user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인의 예약만 삭제할 수 있습니다.")
+
+    # 확정된 예약인지 확인
+    for res in reservations:
+        if res.is_confirmed:
+            raise HTTPException(status_code=400, detail="확정된 예약은 삭제할 수 없습니다.")
+
+    # 트랜잭션을 사용하여 예약 삭제
+    try:
+        for res in reservations:
+            db.delete(res)
+        db.commit()
+        return {"message": "예약이 성공적으로 삭제되었습니다.", "reservation_group_id": reservation_group_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"예약 삭제 중 오류 발생: {str(e)}")
