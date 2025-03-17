@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 from app.models.reservation import Reservation
 from app.models.exam_schedule import ExamSchedule
 from app.models.user import User
@@ -14,53 +15,55 @@ from typing import List, Optional  # List 타입 추가
 router = APIRouter(prefix="/reservations", tags=["reservations"])
 
 
-@router.get("/", response_model=List[ReservationOut])
+@router.get("/", response_model=List[dict])
 async def get_user_reservations(
-    start_date: Optional[str] = Query(None, description="조회 시작 날짜 (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="조회 종료 날짜 (YYYY-MM-DD)"),
-    is_confirmed: Optional[bool] = Query(None, description="확정 여부 필터"),
-    past: Optional[bool] = Query(None, description="과거 예약 여부 필터"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    date: str = None,
+    is_confirmed: bool = None,
+    past: bool = None,
 ):
     """
-    사용자 예약 조회 API: 현재 로그인한 사용자의 예약 정보를 필터링하여 조회
-    - 날짜 범위 지정 가능 (start_date, end_date)
-    - 확정 여부 필터링 가능 (is_confirmed)
-    - 과거 또는 미래 예약 필터링 가능 (past)
+    사용자의 예약 조회 API (예약 그룹별로 묶어서 반환)
     """
     query = db.query(Reservation).filter(Reservation.user_id == current_user.id)
 
-    # 날짜 필터링
-    if start_date:
+    if date:
         try:
-            start_date_parsed = datetime.strptime(start_date, "%Y-%m-%d").date()
-            query = query.filter(Reservation.date >= start_date_parsed)
+            query_date = datetime.strptime(date, "%Y-%m-%d").date()
+            query = query.filter(Reservation.date == query_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.")
-    
-    if end_date:
-        try:
-            end_date_parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
-            query = query.filter(Reservation.date <= end_date_parsed)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.")
+            raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다.")
 
-    # 확정 여부 필터링
     if is_confirmed is not None:
         query = query.filter(Reservation.is_confirmed == is_confirmed)
 
-    # 과거 예약 필터링
     if past is not None:
-        now = datetime.date()
+        now = datetime.utcnow().date()
         if past:
             query = query.filter(Reservation.date < now)
         else:
             query = query.filter(Reservation.date >= now)
 
-    # 데이터 조회 및 반환
-    user_reservations = query.all()
-    return user_reservations
+    reservations = query.all()
+    
+    grouped_reservations = {}
+    for r in reservations:
+        if r.reservation_group_id not in grouped_reservations:
+            grouped_reservations[r.reservation_group_id] = {
+                "reservation_group_id": r.reservation_group_id,
+                "reservations": []
+            }
+        grouped_reservations[r.reservation_group_id]["reservations"].append({
+            "reservation_id": r.id,
+            "date": r.date.strftime("%Y-%m-%d"),
+            "start_hour": r.start_hour,
+            "end_hour": r.end_hour,
+            "reserved_count": r.reserved_count,
+            "is_confirmed": r.is_confirmed
+        })
+
+    return list(grouped_reservations.values())
 
 
 @router.post("/", response_model=List[ReservationOut])
@@ -72,6 +75,9 @@ async def create_reservation(
     """
     예약 신청 API: 특정 날짜(start_date)의 특정 시간(start_hour) ~ 특정 날짜(end_date)의 특정 시간(end_hour)에 예약 요청
     """
+
+    new_group_id = db.query(func.coalesce(func.max(Reservation.reservation_group_id), 0) + 1).scalar()
+
     # 1. 날짜 변환 및 검증
     try:
         start_date = reservation.start_date
@@ -81,7 +87,7 @@ async def create_reservation(
         raise HTTPException(status_code=400, detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.")
 
     # 2. 시험 시작 3일 전인지 체크
-    if start_date - timedelta(days=3) < datetime.date():
+    if start_date - timedelta(days=3) < datetime.utcnow().date():
         raise ReservationTimeError()
 
     # 3. 신청 시간이 1시간 단위인지 체크
@@ -121,6 +127,7 @@ async def create_reservation(
 
         # 예약 생성
         new_reservation = Reservation(
+            reservation_group_id=new_group_id,
             user_id=current_user.id,
             date=current_date,
             start_hour=current_start_hour,
