@@ -1,6 +1,7 @@
 # app/api/main.py (일부)
 from fastapi import APIRouter
-from app.api.routes import users, admin, token, reservation  # token 모듈 추가
+from app.api.routes.admin import admin
+from app.api.routes.user import users, token, reservation  # token 모듈 추가
 
 api_router = APIRouter()
 api_router.include_router(users.router)            # /v1/users/...
