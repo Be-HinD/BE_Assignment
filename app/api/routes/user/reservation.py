@@ -6,7 +6,7 @@ from sqlalchemy.sql import func
 from app.models.reservation import Reservation
 from app.models.exam_schedule import ExamSchedule
 from app.models.user import User
-from app.schemas.reservation_schema import ReservationCreate, ReservationOut
+from app.schemas.reservation_schema import ReservationCreate, ReservationOut, ReservationUpdate
 from app.database.dependencies import get_db
 from app.core.security import get_current_user
 from app.core.exceptions import ReservationTimeError, ReservationCapacityError
@@ -146,3 +146,74 @@ async def create_reservation(
         current_start_hour = 0  # 다음 날부터는 00시부터 시작
 
     return new_reservations
+
+@router.put("/{reservation_group_id}")
+async def update_reservation(
+    reservation_group_id: int,
+    updated_reservation: ReservationUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    사용자 본인 예약 수정 API:
+    - 예약이 본인 예약인지 확인
+    - 예약이 확정되지 않았는지 확인
+    - 예약 시작 시간이 현재 시간 기준 3일 이전인지 확인
+    - 기존 예약 데이터를 삭제 후 새로운 예약 데이터 삽입
+    """
+
+    # 기존 예약 조회 (reservation_group_id 기반)
+    reservations = (
+        db.query(Reservation)
+        .filter(
+            Reservation.reservation_group_id == reservation_group_id,
+            Reservation.user_id == current_user.id,
+        )
+        .all()
+    )
+
+    if not reservations:
+        raise HTTPException(status_code=404, detail="해당 예약이 존재하지 않거나 수정 권한이 없습니다.")
+
+    # 확정 여부 확인
+    if any(res.is_confirmed for res in reservations):
+        raise HTTPException(status_code=400, detail="확정된 예약은 수정할 수 없습니다.")
+
+    # 예약 시작 시간이 현재 기준 3일 이내인지 확인
+    start_date = min(res.date for res in reservations)  # 기존 예약 중 가장 빠른 날짜
+    if start_date - timedelta(days=3) < datetime.utcnow().date():
+        raise HTTPException(status_code=400, detail="예약 시작 시간이 3일 이내인 경우 수정할 수 없습니다.")
+
+    # 트랜잭션 처리 (삭제 후 신규 데이터 삽입)
+    try:
+        db.query(Reservation).filter(Reservation.reservation_group_id == reservation_group_id).delete()
+
+        new_reservations = []
+        current_date = updated_reservation.start_date
+        current_start_hour = updated_reservation.start_hour
+
+        while current_date <= updated_reservation.end_date:
+            current_end_hour = 24 if current_date < updated_reservation.end_date else updated_reservation.end_hour
+
+            new_reservation = Reservation(
+                reservation_group_id=reservation_group_id,
+                user_id=current_user.id,
+                date=current_date,
+                start_hour=current_start_hour,
+                end_hour=current_end_hour,
+                reserved_count=updated_reservation.reserved_count,
+                is_confirmed=False,
+            )
+
+            db.add(new_reservation)
+            new_reservations.append(new_reservation)
+
+            current_date += timedelta(days=1)
+            current_start_hour = 0  # 다음 날짜부터는 00시부터 시작
+
+        db.commit()
+        return {"message": "예약 수정 완료", "reservation_group_id": reservation_group_id}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"예약 수정 중 오류 발생: {str(e)}")

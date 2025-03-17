@@ -47,7 +47,6 @@ class ReservationGroupOut(BaseModel):
         from_attributes = True
 
 class ReservationUpdate(BaseModel):
-    reservation_group_id: int
     start_date: date
     start_hour: int
     end_date: date
