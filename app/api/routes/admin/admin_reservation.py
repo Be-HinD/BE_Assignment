@@ -2,7 +2,9 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from app.models.exam_schedule import ExamSchedule
 from app.models.reservation import Reservation
 from app.schemas.reservation_schema import ReservationGroupOut
 from app.database.dependencies import get_db
@@ -88,3 +90,81 @@ async def get_admin_reservations(
     ]
 
     return response_data
+
+@router.post("/confirm/{reservation_group_id}")
+async def confirm_reservation(
+    reservation_group_id: int,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin_user),
+):
+    """
+    관리자 예약 확정 API: reservation_group_id에 해당하는 예약을 확정하고, exam_schedules에 반영한다.
+    """
+    # 예약 그룹 조회
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.reservation_group_id == reservation_group_id, Reservation.is_confirmed == False)
+        .all()
+    )
+    
+    if not reservations:
+        raise HTTPException(status_code=404, detail="해당 예약 그룹을 찾을 수 없거나 이미 확정된 예약입니다.")
+
+    # 예약 확정 가능 여부 확인 (같은 시간대 예약 50,000명 초과 여부)
+    for res in reservations:
+        total_reserved = (
+            db.query(func.sum(Reservation.reserved_count))
+            .filter(
+                Reservation.date == res.date,
+                Reservation.start_hour == res.start_hour,
+                Reservation.end_hour == res.end_hour,
+                Reservation.is_confirmed == True,
+            )
+            .scalar() or 0
+        )
+
+        if total_reserved + res.reserved_count > 50000:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{res.date} {res.start_hour}:00 ~ {res.end_hour}:00 예약이 인원 초과로 확정 불가",
+            )
+
+    # 트랜잭션 처리 (예외 발생 시 롤백)
+    try:
+        for res in reservations:
+            # `exam_schedules`에 해당 시간대의 일정이 있는지 확인
+            exam_schedule = (
+                db.query(ExamSchedule)
+                .filter(
+                    ExamSchedule.date == res.date,
+                    ExamSchedule.start_hour == res.start_hour,
+                    ExamSchedule.end_hour == res.end_hour,
+                )
+                .first()
+            )
+
+            if exam_schedule:
+                # 기존 일정이 있으면 `total_reserved_count` 증가
+                exam_schedule.total_reserved_count += res.reserved_count
+            else:
+                # 새로운 일정 생성
+                exam_schedule = ExamSchedule(
+                    date=res.date,
+                    start_hour=res.start_hour,
+                    end_hour=res.end_hour,
+                    total_reserved_count=res.reserved_count,
+                )
+                db.add(exam_schedule)
+                db.flush()  # 새로 추가된 객체의 ID를 가져오기 위해 flush 수행
+
+            # 예약 확정 및 `exam_schedule_id` 업데이트
+            res.is_confirmed = True
+            res.exam_schedule_id = exam_schedule.id  # ✅ `exam_schedule_id` 갱신
+
+        # 변경 사항 커밋
+        db.commit()
+        return {"message": "예약 확정 완료", "reservation_group_id": reservation_group_id}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"예약 확정 중 오류 발생: {str(e)}")
