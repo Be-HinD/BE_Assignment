@@ -3,12 +3,15 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
+from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 from app.models.exam_schedule import ExamSchedule
 from app.models.reservation import Reservation
 from app.schemas.reservation_schema import ReservationGroupOut
 from app.database.dependencies import get_db
 from app.core.security import get_current_admin_user  # 관리자 권한 검증
+from fastapi import APIRouter, Depends, HTTPException
+
 
 router = APIRouter(prefix="/admin/reservations", tags=["admin_reservations"])
 
@@ -90,17 +93,6 @@ async def get_admin_reservations(
     ]
 
     return response_data
-
-from datetime import datetime
-from sqlalchemy.sql import func
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.models.reservation import Reservation
-from app.models.exam_schedule import ExamSchedule
-from app.database.dependencies import get_db
-from app.core.security import get_current_admin_user
-
-router = APIRouter(prefix="/admin/reservations", tags=["admin_reservations"])
 
 @router.post("/confirm/{reservation_group_id}")
 async def confirm_reservation(
@@ -204,9 +196,8 @@ async def delete_admin_reservation(
     """
     관리자 예약 삭제 API
     - 모든 예약을 삭제할 수 있음 (확정된 예약 포함)
-    - 특정 reservation_group_id를 기준으로 예약 그룹 삭제
+    - 확정된 예약 삭제 시 `exam_schedule`의 `total_reserved_count`도 업데이트
     """
-    # 해당 `reservation_group_id`에 속하는 예약 조회
     reservations = (
         db.query(Reservation)
         .filter(Reservation.reservation_group_id == reservation_group_id)
@@ -216,12 +207,32 @@ async def delete_admin_reservation(
     if not reservations:
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
 
-    # 트랜잭션을 사용하여 예약 삭제
     try:
+        # 연관된 exam_schedule 데이터 확인 및 `total_reserved_count` 감소
+        for res in reservations:
+            if res.is_confirmed and res.exam_schedule_id:
+                exam_schedule = (
+                    db.query(ExamSchedule)
+                    .filter(ExamSchedule.id == res.exam_schedule_id)
+                    .first()
+                )
+                if exam_schedule:
+                    # total_reserved_count에서 해당 예약 인원만큼 감소
+                    exam_schedule.total_reserved_count -= res.reserved_count
+
+                    # total_reserved_count가 0이 되면 exam_schedule 삭제
+                    if exam_schedule.total_reserved_count <= 0:
+                        db.delete(exam_schedule)
+
+        # 예약 데이터 삭제
         for res in reservations:
             db.delete(res)
+
+        # 변변경 사항 반영
         db.commit()
         return {"message": "관리자가 예약을 삭제하였습니다.", "reservation_group_id": reservation_group_id}
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"예약 삭제 중 오류 발생: {str(e)}")
+    

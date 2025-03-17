@@ -224,8 +224,6 @@ from app.models.reservation import Reservation
 from app.database.dependencies import get_db
 from app.core.security import get_current_user
 
-router = APIRouter(prefix="/reservations", tags=["reservations"])
-
 @router.delete("/{reservation_group_id}")
 async def delete_reservation(
     reservation_group_id: int,
