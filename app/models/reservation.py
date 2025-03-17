@@ -7,8 +7,9 @@ class Reservation(Base):
     __tablename__ = "reservations"
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # ✅ ForeignKey 추가
-    exam_schedule_id = Column(BigInteger, ForeignKey("exam_schedules.id", ondelete="CASCADE"), nullable=True)  # ✅ ForeignKey 추가
+    reservation_group_id = Column(BigInteger, index=True, nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    exam_schedule_id = Column(BigInteger, ForeignKey("exam_schedules.id", ondelete="CASCADE"), nullable=True)
     date = Column(Date, nullable=False)  # 예약 날짜 (YYYY-MM-DD)
     start_hour = Column(Integer, nullable=False)  # 시작 시간 (24시간제)
     end_hour = Column(Integer, nullable=False)  # 종료 시간 (24시간제)
