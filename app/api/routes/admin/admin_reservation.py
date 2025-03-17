@@ -91,6 +91,17 @@ async def get_admin_reservations(
 
     return response_data
 
+from datetime import datetime
+from sqlalchemy.sql import func
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.models.reservation import Reservation
+from app.models.exam_schedule import ExamSchedule
+from app.database.dependencies import get_db
+from app.core.security import get_current_admin_user
+
+router = APIRouter(prefix="/admin/reservations", tags=["admin_reservations"])
+
 @router.post("/confirm/{reservation_group_id}")
 async def confirm_reservation(
     reservation_group_id: int,
@@ -99,7 +110,11 @@ async def confirm_reservation(
 ):
     """
     관리자 예약 확정 API: reservation_group_id에 해당하는 예약을 확정하고, exam_schedules에 반영한다.
+    - 현재 시간 기준으로 이미 시작된 예약은 확정 불가
     """
+    # 현재 시간 기준으로 확인
+    now = datetime.utcnow()
+
     # 예약 그룹 조회
     reservations = (
         db.query(Reservation)
@@ -109,6 +124,16 @@ async def confirm_reservation(
     
     if not reservations:
         raise HTTPException(status_code=404, detail="해당 예약 그룹을 찾을 수 없거나 이미 확정된 예약입니다.")
+
+    # 🚨 시작 시간이 현재 시간을 지난 예약이 있는지 확인
+    for res in reservations:
+        reservation_start_time = datetime.combine(res.date, datetime.min.time()).replace(hour=res.start_hour)
+        
+        if reservation_start_time < now:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{res.date} {res.start_hour}:00 ~ {res.end_hour}:00 예약은 이미 시작되어 확정할 수 없습니다.",
+            )
 
     # 예약 확정 가능 여부 확인 (같은 시간대 예약 50,000명 초과 여부)
     for res in reservations:
@@ -159,7 +184,7 @@ async def confirm_reservation(
 
             # 예약 확정 및 `exam_schedule_id` 업데이트
             res.is_confirmed = True
-            res.exam_schedule_id = exam_schedule.id  # ✅ `exam_schedule_id` 갱신
+            res.exam_schedule_id = exam_schedule.id  # `exam_schedule_id` 갱신
 
         # 변경 사항 커밋
         db.commit()
