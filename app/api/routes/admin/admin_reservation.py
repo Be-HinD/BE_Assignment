@@ -193,3 +193,35 @@ async def confirm_reservation(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"예약 확정 중 오류 발생: {str(e)}")
+
+
+@router.delete("/{reservation_group_id}")
+async def delete_admin_reservation(
+    reservation_group_id: int,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin_user),
+):
+    """
+    관리자 예약 삭제 API
+    - 모든 예약을 삭제할 수 있음 (확정된 예약 포함)
+    - 특정 reservation_group_id를 기준으로 예약 그룹 삭제
+    """
+    # 해당 `reservation_group_id`에 속하는 예약 조회
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.reservation_group_id == reservation_group_id)
+        .all()
+    )
+
+    if not reservations:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    # 트랜잭션을 사용하여 예약 삭제
+    try:
+        for res in reservations:
+            db.delete(res)
+        db.commit()
+        return {"message": "관리자가 예약을 삭제하였습니다.", "reservation_group_id": reservation_group_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"예약 삭제 중 오류 발생: {str(e)}")
