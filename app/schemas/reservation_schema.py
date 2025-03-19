@@ -56,3 +56,15 @@ class ReservationUpdate(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ReservationUpdateAdmin(BaseModel):
+    start_date: date
+    start_hour: int
+    end_date: date
+    end_hour: int
+    reserved_count: int
+    is_confirmed: Optional[bool] = None  # 선택적 필드
+    updated_at: datetime = None
+
+    class Config:
+        from_attributes = True

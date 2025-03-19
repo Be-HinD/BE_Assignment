@@ -7,7 +7,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 from app.models.exam_schedule import ExamSchedule
 from app.models.reservation import Reservation
-from app.schemas.reservation_schema import ReservationGroupOut
+from app.schemas.reservation_schema import ReservationGroupOut, ReservationUpdateAdmin
 from app.database.dependencies import get_db
 from app.core.security import get_current_admin_user  # 관리자 권한 검증
 from fastapi import APIRouter, Depends, HTTPException
@@ -143,7 +143,7 @@ async def confirm_reservation(
         if total_reserved + res.reserved_count > 50000:
             raise HTTPException(
                 status_code=400,
-                detail=f"{res.date} {res.start_hour}:00 ~ {res.end_hour}:00 예약이 인원 초과로 확정 불가",
+                detail=f"{res.date} {res.start_hour}:00 ~ {res.end_hour}:00 사이의 예약이 인원 초과로 확정 불가",
             )
 
     # 트랜잭션 처리 (예외 발생 시 롤백)
@@ -236,3 +236,128 @@ async def delete_admin_reservation(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"예약 삭제 중 오류 발생: {str(e)}")
     
+
+@router.put("/{reservation_group_id}")
+async def update_admin_reservation(
+    reservation_group_id: int,
+    updated_reservation: ReservationUpdateAdmin,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin_user),
+):
+    """
+    관리자 예약 수정 API
+    - 확정 여부 관계없이 날짜, 인원, 시간 수정 가능
+    - 3일 이내의 예약 수정 불가
+    - 변경 후 50,000명 초과 불가
+    - 확정된 예약이면 `exam_schedule`도 함께 업데이트
+    """
+
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.reservation_group_id == reservation_group_id)
+        .all()
+    )
+
+    if not reservations:
+        raise HTTPException(status_code=404, detail="해당 예약을 찾을 수 없습니다.")
+
+    # 기존 예약의 확정 여부
+    was_confirmed = reservations[0].is_confirmed
+    now = datetime.utcnow().date()
+
+    # 1️⃣ 3일 이내 예약 수정 불가
+    if updated_reservation.start_date < now + timedelta(days=3):
+        raise HTTPException(status_code=400, detail="예약 수정은 현재 날짜 기준 3일 이후부터 가능합니다.")
+
+    try:
+        # 2️⃣ 기존 확정 예약을 변경할 경우 `exam_schedule`에서 인원 차감
+        if was_confirmed:
+            for res in reservations:
+                if res.exam_schedule_id:
+                    exam_schedule = db.query(ExamSchedule).filter(
+                        ExamSchedule.id == res.exam_schedule_id
+                    ).first()
+                    if exam_schedule:
+                        exam_schedule.total_reserved_count -= res.reserved_count
+                        if exam_schedule.total_reserved_count <= 0:
+                            db.delete(exam_schedule)
+
+        # 3️⃣ 새로운 날짜 및 시간의 `exam_schedule` 검증 (50,000명 초과 방지)
+        total_reserved = (
+            db.query(func.sum(Reservation.reserved_count))
+            .filter(
+                Reservation.date == updated_reservation.start_date,
+                Reservation.start_hour == updated_reservation.start_hour,
+                Reservation.end_hour == updated_reservation.end_hour,
+                Reservation.is_confirmed == True,
+            )
+            .scalar()
+            or 0
+        )
+
+        if total_reserved + updated_reservation.reserved_count > 50000:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{updated_reservation.start_date} {updated_reservation.start_hour}:00 ~ {updated_reservation.end_hour}:00 예약이 인원 초과로 확정 불가",
+            )
+
+        # 2️⃣ 기존 예약 삭제
+        db.query(Reservation).filter(
+            Reservation.reservation_group_id == reservation_group_id
+        ).delete()
+        db.commit()
+
+        # 3️⃣ 새로운 날짜 범위만큼 데이터 추가
+        current_date = updated_reservation.start_date
+        new_reservations = []
+        while current_date <= updated_reservation.end_date:
+            new_reservations.append(
+                Reservation(
+                    reservation_group_id=reservation_group_id,
+                    user_id=reservations[0].user_id,  # 기존 예약의 사용자 ID 유지
+                    date=current_date,
+                    start_hour=updated_reservation.start_hour,
+                    end_hour=updated_reservation.end_hour,
+                    reserved_count=updated_reservation.reserved_count,
+                    is_confirmed=updated_reservation.is_confirmed,
+                    updated_at=datetime.utcnow(),
+                )
+            )
+            current_date += timedelta(days=1)  # 날짜 증가
+
+        # 4️⃣ 새로운 예약 데이터 추가
+        db.add_all(new_reservations)
+
+        # 5️⃣ 확정된 예약이면 `exam_schedule` 업데이트
+        if updated_reservation.is_confirmed:
+            for res in reservations:
+                exam_schedule = (
+                    db.query(ExamSchedule)
+                    .filter(
+                        ExamSchedule.date == res.date,
+                        ExamSchedule.start_hour == res.start_hour,
+                        ExamSchedule.end_hour == res.end_hour,
+                    )
+                    .first()
+                )
+
+                if exam_schedule:
+                    exam_schedule.total_reserved_count += updated_reservation.reserved_count
+                else:
+                    exam_schedule = ExamSchedule(
+                        date=res.date,
+                        start_hour=res.start_hour,
+                        end_hour=res.end_hour,
+                        total_reserved_count=updated_reservation.reserved_count,
+                    )
+                    db.add(exam_schedule)
+                    db.flush()  # 새로운 객체의 ID 가져오기
+
+                res.exam_schedule_id = exam_schedule.id  # 연결
+
+        db.commit()
+        return {"message": "예약 수정 완료", "reservation_group_id": reservation_group_id}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"예약 수정 중 오류 발생: {str(e)}")
