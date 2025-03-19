@@ -1,0 +1,245 @@
+{
+	"info": {
+		"_postman_id": "bf93e8aa-66f3-40b5-94fe-321464161138",
+		"name": "BE_Assignment",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "32199121"
+	},
+	"item": [
+		{
+			"name": "유저 생성API",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"username\": \"정현\",\r\n  \"email\": \"bb@naver.com\",\r\n  \"password\": \"bbbbbb\",\r\n  \"role\": \"user\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8000/v1/users/register"
+			},
+			"response": []
+		},
+		{
+			"name": "토큰 발급 API",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "username",
+							"value": "정현",
+							"type": "text"
+						},
+						{
+							"key": "password",
+							"value": "1q2w3e4r",
+							"type": "text"
+						}
+					]
+				},
+				"url": "http://localhost:8000/v1/token"
+			},
+			"response": []
+		},
+		{
+			"name": "[관리자] 예약 조회 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZW1haWwiOiJiYkBuYXZlci5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NDIyMTI4OTR9.Pv4KudSeIHTgABAoZwI8HI99NujjpyMssSEAdMD8W88"
+					}
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8000/v1/admin/reservations?start_date=2025-03-01&end_date=2025-03-31",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"v1",
+						"admin",
+						"reservations"
+					],
+					"query": [
+						{
+							"key": "user_id",
+							"value": "1",
+							"disabled": true
+						},
+						{
+							"key": "start_date",
+							"value": "2025-03-01"
+						},
+						{
+							"key": "end_date",
+							"value": "2025-03-31"
+						},
+						{
+							"key": "is_confirmed",
+							"value": "false",
+							"disabled": true
+						},
+						{
+							"key": "past",
+							"value": "false",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "[관리자] 예약 확정 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZW1haWwiOiJiYkBuYXZlci5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NDIyMTM4OTd9.BC7j1-sxxMKhiwaMPvQTCAdEx165rIzscjthoF5-Gxc"
+					}
+				},
+				"method": "POST",
+				"header": [],
+				"url": "http://localhost:8000/v1/admin/reservations/confirm/1"
+			},
+			"response": []
+		},
+		{
+			"name": "[관리자] 예약 삭제 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJiYkBuYXZlci5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NDIyMTc1MDV9.3nLyxAPXnHa8QRNGAIYapNWRxbQSkNxA_vTLCU6Khzw"
+					}
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": "http://localhost:8000/v1/admin/reservations/1"
+			},
+			"response": []
+		},
+		{
+			"name": "[관리자] 예약 수정 API",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "[사용자] 예약 신청 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZW1haWwiOiJhYUBuYXZlci5jb20iLCJyb2xlIjoidXNlciIsImV4cCI6MTc0MjIxNzI5NX0.N5jm__GfuN7BFjx77WTicyoHLFblGr7fB1IeeQ4wCFc"
+					}
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"start_date\": \"2025-04-01\",\r\n  \"start_hour\": 10,\r\n  \"end_date\": \"2025-04-02\",\r\n  \"end_hour\": 14,\r\n  \"reserved_count\": 1000\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8000/v1/reservations"
+			},
+			"response": []
+		},
+		{
+			"name": "[사용자] 예약 조회 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJhYUBuYXZlci5jb20iLCJyb2xlIjoidXNlciIsImV4cCI6MTc0MjIxMDE2M30.9IBL34yzrs00C9mvuyxq7q6J_lUWkdeIzVAu32LgD3s"
+					}
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8000/v1/reservations?start_date=2025-03-01&end_date=2025-03-31&past=false",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"v1",
+						"reservations"
+					],
+					"query": [
+						{
+							"key": "start_date",
+							"value": "2025-03-01"
+						},
+						{
+							"key": "end_date",
+							"value": "2025-03-31"
+						},
+						{
+							"key": "past",
+							"value": "false"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "[사용자] 예약 수정 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJhYUBuYXZlci5jb20iLCJyb2xlIjoidXNlciIsImV4cCI6MTc0MjIxNTQ5NH0.8AkMjpmErr89JG5ZycDTSiqBSRT_Fs-KCsjbwSb2Mhs"
+					}
+				},
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"start_date\": \"2025-03-28\",\r\n    \"start_hour\": 12,\r\n    \"end_date\": \"2025-03-30\",\r\n    \"end_hour\": 15,\r\n    \"reserved_count\": 500\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8000/v1/reservations/1"
+			},
+			"response": []
+		},
+		{
+			"name": "[사용자] 예약 삭제 API",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZW1haWwiOiJhYUBuYXZlci5jb20iLCJyb2xlIjoidXNlciIsImV4cCI6MTc0MjM4NDY3MX0.LBkBhJ6gjPkSTMYlq5YmHSnaUVFvK5J42xC_vJ9gkM0"
+					}
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": "http://localhost:8000/v1/reservations/2"
+			},
+			"response": []
+		}
+	]
+}
