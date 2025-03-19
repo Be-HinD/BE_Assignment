@@ -33,8 +33,10 @@ BE/
 │   │   └── reservation.py
 │   │   └── user.py
 │   └── schemas/ # 데이터 검증 및 API 응답 모델
-│       ├── reservation_schema.py
-│       └── user_schema.py
+│   │   ├── reservation_schema.py
+│   │   └── user_schema.py
+│   └── exec/ # 포팅 매뉴얼 관련
+│       └── ...
 ├── .env  # 환경변수 파일 (DATABASE_URL 등)
 ├── main.py
 ├── requirements.txt  # 프로젝트 의존성 목록
