@@ -120,9 +120,7 @@ FastAPI는 Swagger UI를 기본 제공하여, API를 쉽게 테스트할 수 있
 
 원할한 Postman 테스트를 위해 관련 JSON파일 첨부하였으니 import하여 참고바랍니다.
 
-```bash
-BE/exec/postman/BE_Assignment.postman_collection.json
-```
+[postman collection](./exec/postman/)
 
 ## ✅ 2. 테스트 참고사항
 
