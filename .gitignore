@@ -14,4 +14,4 @@ __pycache__/
 *.pyo
 
 # 환경변수 파일 제외
-.env
+# .env

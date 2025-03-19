@@ -218,11 +218,6 @@ async def update_reservation(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"예약 수정 중 오류 발생: {str(e)}")
     
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.models.reservation import Reservation
-from app.database.dependencies import get_db
-from app.core.security import get_current_user
 
 @router.delete("/{reservation_group_id}")
 async def delete_reservation(

@@ -152,3 +152,7 @@ form-data 방식으로 BODY에 보내주세요.
 username:value
 password:value
 ```
+
+## ✅ 3. API 명세서
+
+> API 명세서는 아래 md문서를 참조해주시면 감사하겠습니다.
