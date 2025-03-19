@@ -126,7 +126,7 @@ BE/exec/postman/BE_Assignment.postman_collection.json
 
 > 엔드포인트에 대한 접근 권한 처리를 JWT 토큰을 통해 진행했습니다. API 테스트에 문제가 없도록 다음을 참고해주시면 감사하겠습니다.
 
-### 📌 1) 유저 등록
+### 📌 1) 유저 등록 (/v1/users/register)
 
 - RequestBody에 다음을 참고하여 유저를 등록해주세요.
 
@@ -139,7 +139,7 @@ BE/exec/postman/BE_Assignment.postman_collection.json
 }
 ```
 
-### 📌 2) 토큰 발급
+### 📌 2) 토큰 발급 (/v1/token)
 
 - 모든 엔드포인트 요청에 토큰이 필요합니다. 다음 API를 통해 토큰 발급 후 <b> Authorization Bearer {Token} </b>을 헤더에 넣고 요청해주세요.
 
